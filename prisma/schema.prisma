@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  INVENTORY_MANAGER
+}
+
+model User {
+  id       String   @id @default(uuid())
+  name     String
+  role     UserRole
+  email    String   @unique
+  password String
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  skuitems  SKUItem[]
+}
+
+//***** SKU MODEL ******
+
+enum Size {
+  XS
+  S
+  M
+  L
+  XL
+  XXL
+}
+
+model ProductCode {
+  id       String    @id @default(uuid())
+  value    String       @unique
+  skuitems SKUItem[]
+}
+
+model SKUItem {
+  id             String          @id @default(uuid())
+  itemName       String
+  size           Size
+  code           String          @unique()
+  productCode    ProductCode     @relation(fields: [productCodeId], references: [id])
+  productCodeId  String
+  createdAt      DateTime        @default(now())
+  vendorSKUs     VendorSKU[]
+  inventoryItems InventoryItem[]
+  createdBy      User            @relation(fields: [userId], references: [id])
+  userId         String
+}
+
+// ***** INVENTORY MODELS *****
+
+enum InventoryItemStatus {
+  PENDING_QC
+  AVAILABLE
+  RESERVED
+  IN_TRANSIT
+  DAMAGED_HOLD
+  REJECTED
+  WRITTEN_OFF
+}
+
+model InventoryItem {
+  id   String @id @default(uuid())
+  code String @unique
+  name String
+  size Size
+
+  sku   SKUItem @relation(fields: [skuId], references: [id])
+  skuId String
+
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  purchaseOrderId String?
+
+  purchaseOrderItem   PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id])
+  purchaseOrderItemId String?
+
+  status InventoryItemStatus @default(PENDING_QC)
+  price  Int
+
+    createdAt    DateTime @default(now())
+}
+
+// ***** VENDOR MODELS *****
+
+model ProductVendors {
+  id   String @id @default(uuid())
+  // code String @default("")
+  name String
+
+  vendorSKU      VendorSKU[]
+  purchaseOrders PurchaseOrder[]
+}
+
+model VendorSKU {
+  id String @id @default(uuid())
+
+  vendorId String
+  vendor   ProductVendors @relation(fields: [vendorId], references: [id])
+
+  skuId String 
+  sku   SKUItem @relation(fields: [skuId], references: [id])
+
+  perUnitPrice       Int
+  purchaseOrderItems PurchaseOrderItem[]
+  @@unique([skuId, vendorId])
+}
+
+//****** PO Models *****
+
+enum PurchaseOrderStatus {
+  COMPLETED
+  PENDING
+  OVERDUE
+}
+
+enum PurchaseOrderItemStatus {
+  COMPLETED
+  PARTIALLY_COMPLETED
+  PENDING
+}
+
+model PurchaseOrder {
+  id   String @id @default(uuid())
+  code String @unique
+
+  createdAt    DateTime @default(now())
+  deliveryDate DateTime
+
+  productVendorsId String
+  productVendors   ProductVendors @relation(fields: [productVendorsId], references: [id])
+
+  purchaseOrderItems PurchaseOrderItem[]
+  inventoryItems     InventoryItem[]
+
+  totalPrice Int
+  status     PurchaseOrderStatus? @default(PENDING)
+}
+
+model PurchaseOrderItem {
+  id String @id @default(uuid())
+
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+
+  vendorSKUId String
+  vendorSKU   VendorSKU @relation(fields: [vendorSKUId], references: [id])
+
+  perUnitPrice     Int
+  totalQuantity    Int
+  receivedQuantity Int @default(0)
+
+  inventoryItems InventoryItem[]
+
+  status PurchaseOrderItemStatus @default(PENDING)
+}
